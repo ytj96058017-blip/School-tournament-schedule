@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>학교 체육대회 토너먼트 매니저</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Canvas Confetti for Celebration -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- Google Fonts & Lucide Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Pretendard', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* 토너먼트 스크롤바 커스텀 */
+    .bracket-scroll::-webkit-scrollbar {
+      height: 8px;
+      width: 8px;
+    }
+    .bracket-scroll::-webkit-scrollbar-thumb {
+      background-color: #cbd5e1;
+      border-radius: 9999px;
+    }
+    .bracket-scroll::-webkit-scrollbar-track {
+      background-color: #f1f5f9;
+    }
+
+    /* 연결선 스타일 */
+    .connector-line {
+      position: absolute;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- 헤더 -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+          <i class="fa-solid fa-trophy text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold text-slate-900 leading-tight">학교 경기 토너먼트 매니저</h1>
+          <p class="text-xs text-slate-500 font-medium">실시간 대진표 생성 및 클릭 승자 진출 시스템</p>
+        </div>
+      </div>
+      
+      <!-- 부가 액션 버튼 -->
+      <div class="flex items-center gap-2">
+        <button id="btn-shuffle-sample" class="px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1.5">
+          <i class="fa-solid fa-wand-magic-sparkles text-indigo-500"></i> 예시 명단 넣기
+        </button>
+        <button id="btn-reset-current" class="px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors flex items-center gap-1.5">
+          <i class="fa-solid fa-arrow-rotate-left"></i> 경기 초기화
+        </button>
+      </div>
+    </div>
+
+    <!-- 5개 종목 탭 네비게이션 -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <div class="flex overflow-x-auto space-x-2 py-2 border-t border-slate-100 no-scrollbar" id="sport-tabs-container">
+        <!-- JS로 5개 탭 렌더링 -->
+      </div>
+    </div>
+  </header>
+
+  <!-- 메인 레이아웃: 좌측 설정 / 중앙 토너먼트 / 우측 우승·준우승자 -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 w-full flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- 1. 좌측 패널: 종목 이름 & 학생 명단 입력 (lg: 3칸) -->
+    <section class="lg:col-span-3 flex flex-col gap-5">
+      <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+        <h2 class="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <span class="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">
+            <i class="fa-solid fa-pen-nib"></i>
+          </span>
+          종목 정보 설정
+        </h2>
+
+        <!-- 종목명 수정 -->
+        <div class="mb-4">
+          <label class="block text-xs font-semibold text-slate-600 mb-1.5" for="input-sport-name">
+            현재 종목 이름
+          </label>
+          <div class="relative">
+            <input type="text" id="input-sport-name" 
+              class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition" 
+              placeholder="예: 배드민턴 단식, 탁구 등">
+          </div>
+        </div>
+
+        <!-- 참가 인원수 & 명단 입력 -->
+        <div class="mb-4">
+          <div class="flex justify-between items-center mb-1.5">
+            <label class="text-xs font-semibold text-slate-600" for="input-students">
+              참가 학생 명단
+            </label>
+            <span id="label-student-count" class="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
+              0명
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 mb-2 leading-relaxed">
+            줄바꿈(엔터) 또는 쉼표(,)로 학생 이름을 구분해 입력하세요.
+          </p>
+          <textarea id="input-students" rows="8" 
+            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition resize-none leading-relaxed" 
+            placeholder="김민준&#10;이서아&#10;박도윤&#10;정지우&#10;최하은&#10;강유준&#10;조은우&#10;윤서진"></textarea>
+        </div>
+
+        <!-- 옵션: 랜덤 섞기 토글 -->
+        <div class="mb-5 flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+          <label for="check-shuffle" class="text-xs font-semibold text-slate-700 cursor-pointer">
+            대진 생성 시 순서 무작위 섞기
+          </label>
+          <input type="checkbox" id="check-shuffle" checked class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer">
+        </div>
+
+        <!-- 대진표 생성 버튼 -->
+        <button id="btn-generate" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-bold rounded-xl shadow-lg shadow-indigo-600/25 transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-diagram-project"></i>
+          대진표 자동 생성
+        </button>
+      </div>
+
+      <!-- 도움말 카드 -->
+      <div class="bg-gradient-to-br from-indigo-50 to-blue-50/60 rounded-2xl p-4 border border-indigo-100 text-xs text-indigo-900 leading-relaxed">
+        <div class="flex items-center gap-2 font-bold mb-1.5 text-indigo-950">
+          <i class="fa-solid fa-circle-info text-indigo-600"></i> 진행 팁
+        </div>
+        <ul class="list-disc list-inside space-y-1 text-slate-600">
+          <li>표준 토너먼트 시딩 알고리즘으로 <strong>부전승을 고르게 분산</strong>하여 4강부터는 부전승 없이 정상 대결이 진행됩니다.</li>
+          <li>경기 블록에서 <strong>이긴 학생 이름을 클릭</strong>하면 다음 라운드로 즉시 올라갑니다.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 2. 중앙 패널: 토너먼트 대진표 (lg: 6칸) -->
+    <section class="lg:col-span-6 flex flex-col">
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col h-full min-h-[560px] overflow-hidden">
+        
+        <!-- 대진표 헤더 상단바 -->
+        <div class="px-5 py-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2 bg-slate-50/50">
+          <div class="flex items-center gap-2">
+            <span id="current-sport-badge" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-600 text-white shadow-sm">
+              종목 1
+            </span>
+            <h2 id="current-sport-display-title" class="text-base font-bold text-slate-900">
+              대진표 현황
+            </h2>
+          </div>
+          <span id="match-progress-text" class="text-xs font-medium text-slate-500 bg-white px-2.5 py-1 rounded-full border border-slate-200">
+            대진표 대기 중
+          </span>
+        </div>
+
+        <!-- 브래킷 캔버스 영역 -->
+        <div id="bracket-container" class="flex-1 p-6 bracket-scroll overflow-x-auto overflow-y-auto relative flex items-center justify-start bg-slate-50/30">
+          <!-- 대진표 없을 때 기본 뷰 -->
+          <div id="empty-bracket-state" class="w-full flex flex-col items-center justify-center text-center py-16 text-slate-400">
+            <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl text-slate-300 mb-3">
+              <i class="fa-solid fa-sitemap"></i>
+            </div>
+            <p class="font-bold text-slate-600 text-sm">생성된 대진표가 없습니다</p>
+            <p class="text-xs text-slate-400 mt-1">좌측에 명단을 입력하고 [대진표 자동 생성]을 눌러주세요.</p>
+          </div>
+
+          <!-- 실제 렌더링될 라운드 컬럼들 -->
+          <div id="tournament-tree" class="hidden flex items-center gap-10 min-w-max py-4"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 우측 패널: 우승 및 준우승 명예의 전당 (lg: 3칸) -->
+    <section class="lg:col-span-3 flex flex-col gap-5">
+      <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col">
+        <h2 class="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <span class="w-6 h-6 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center text-xs">
+            <i class="fa-solid fa-medal"></i>
+          </span>
+          시상 및 최종 결과
+        </h2>
+
+        <!-- 현재 종목 결과 카드 -->
+        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-b from-amber-500/10 via-amber-50/50 to-transparent p-5 border border-amber-200/60 mb-5">
+          <div class="absolute -right-4 -bottom-4 text-amber-200/40 text-7xl select-none pointer-events-none">
+            <i class="fa-solid fa-trophy"></i>
+          </div>
+
+          <!-- 1위 우승자 -->
+          <div class="mb-4">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-full bg-amber-400 text-white flex items-center justify-center text-[11px] font-black shadow-sm">1</span>
+              <span class="text-xs font-bold text-amber-900 tracking-wider uppercase">우승자 (1st Place)</span>
+            </div>
+            <div id="winner-box" class="h-14 px-4 bg-white/90 backdrop-blur rounded-xl border border-amber-300/80 flex items-center gap-3 shadow-sm transition-all duration-300">
+              <div class="w-9 h-9 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center text-base">
+                <i class="fa-solid fa-crown animate-bounce"></i>
+              </div>
+              <div class="flex-1 overflow-hidden">
+                <span id="winner-name" class="block font-extrabold text-slate-800 text-base truncate">
+                  -
+                </span>
+                <span id="winner-sub" class="block text-[11px] text-slate-400 truncate">결승전 승리 대기 중</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2위 준우승자 -->
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="w-5 h-5 rounded-full bg-slate-400 text-white flex items-center justify-center text-[11px] font-black shadow-sm">2</span>
+              <span class="text-xs font-bold text-slate-600 tracking-wider uppercase">준우승자 (2nd Place)</span>
+            </div>
+            <div id="runnerup-box" class="h-14 px-4 bg-white/90 backdrop-blur rounded-xl border border-slate-200 flex items-center gap-3 shadow-sm transition-all duration-300">
+              <div class="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-base">
+                <i class="fa-solid fa-medal"></i>
+              </div>
+              <div class="flex-1 overflow-hidden">
+                <span id="runnerup-name" class="block font-bold text-slate-700 text-base truncate">
+                  -
+                </span>
+                <span id="runnerup-sub" class="block text-[11px] text-slate-400 truncate">결승전 패자 대기 중</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5개 종목 전체 현황 요약 리스트 -->
+        <div class="flex-1 flex flex-col">
+          <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 flex items-center justify-between">
+            <span>전 종목 입상 현황</span>
+            <i class="fa-solid fa-list-check text-slate-400"></i>
+          </h3>
+          <div class="space-y-2 overflow-y-auto max-h-[300px] pr-1" id="all-sports-summary">
+            <!-- JS 동적 생성 -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 하단 안내 배너 -->
+  <footer class="bg-white border-t border-slate-200 py-3 text-center text-xs text-slate-400">
+    학교 체육대회 및 특별활동용 반응형 토너먼트 프로그램 &bull; 브라우저 로컬 저장 지원
+  </footer>
+
+  <!-- 알림 토스트 모달 -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-semibold">
+    <i id="toast-icon" class="fa-solid fa-circle-check text-indigo-400"></i>
+    <span id="toast-message">메시지</span>
+  </div>
+
+  <script>
+    // 5개 종목 기본 구조
+    const DEFAULT_SPORTS = [
+      { id: 1, name: "배드민턴 단식", rawNames: "김도윤\n이지민\n박서준\n정유나\n최현우", rounds: [], winner: null, runnerUp: null },
+      { id: 2, name: "탁구 단식", rawNames: "", rounds: [], winner: null, runnerUp: null },
+      { id: 3, name: "체스 / 오목", rawNames: "", rounds: [], winner: null, runnerUp: null },
+      { id: 4, name: "피구 에이스전", rawNames: "", rounds: [], winner: null, runnerUp: null },
+      { id: 5, name: "e스포츠 경기", rawNames: "", rounds: [], winner: null, runnerUp: null },
+    ];
+
+    let sportsData = [];
+    let activeSportId = 1;
+
+    // DOM 요소 캐싱
+    const sportTabsContainer = document.getElementById('sport-tabs-container');
+    const inputSportName = document.getElementById('input-sport-name');
+    const inputStudents = document.getElementById('input-students');
+    const labelStudentCount = document.getElementById('label-student-count');
+    const checkShuffle = document.getElementById('check-shuffle');
+    const btnGenerate = document.getElementById('btn-generate');
+    const btnResetCurrent = document.getElementById('btn-reset-current');
+    const btnShuffleSample = document.getElementById('btn-shuffle-sample');
+    const currentSportBadge = document.getElementById('current-sport-badge');
+    const currentSportDisplayTitle = document.getElementById('current-sport-display-title');
+    const matchProgressText = document.getElementById('match-progress-text');
+    const emptyBracketState = document.getElementById('empty-bracket-state');
+    const tournamentTree = document.getElementById('tournament-tree');
+    const winnerNameElem = document.getElementById('winner-name');
+    const winnerSubElem = document.getElementById('winner-sub');
+    const winnerBox = document.getElementById('winner-box');
+    const runnerupNameElem = document.getElementById('runnerup-name');
+    const runnerupSubElem = document.getElementById('runnerup-sub');
+    const runnerupBox = document.getElementById('runnerup-box');
+    const allSportsSummary = document.getElementById('all-sports-summary');
+    const toast = document.getElementById('toast');
+    const toastMessage = document.getElementById('toast-message');
+    const toastIcon = document.getElementById('toast-icon');
+
+    // 문자열 HTML 이스케이프
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // 로컬 스토리지 데이터 로드
+    function loadInitialData() {
+      try {
+        const saved = localStorage.getItem('school_sports_tournament_data_v2');
+        if (saved) {
+          sportsData = JSON.parse(saved);
+        } else {
+          sportsData = JSON.parse(JSON.stringify(DEFAULT_SPORTS));
+        }
+      } catch (e) {
+        sportsData = JSON.parse(JSON.stringify(DEFAULT_SPORTS));
+      }
+    }
+
+    // 로컬 스토리지 저장
+    function saveData() {
+      try {
+        localStorage.setItem('school_sports_tournament_data_v2', JSON.stringify(sportsData));
+      } catch (e) {
+        console.error("데이터 저장 실패:", e);
+      }
+    }
+
+    // 현재 활성화된 종목 객체 가져오기
+    function getCurrentSport() {
+      return sportsData.find(s => s.id === activeSportId) || sportsData[0];
+    }
+
+    // 참가 학생 이름 파싱 (줄바꿈 또는 콤마 분리)
+    function parseStudentNames(text) {
+      if (!text) return [];
+      return text
+        .split(/[\n,]/)
+        .map(n => n.trim())
+        .filter(n => n.length > 0);
+    }
+
+    // 인원수 뱃지 갱신
+    function updateCountBadge() {
+      const names = parseStudentNames(inputStudents.value);
+      labelStudentCount.textContent = `${names.length}명`;
+    }
+
+    // 토스트 알림 표시
+    let toastTimeout;
+    function showToast(msg, iconClass = "fa-circle-check", iconColor = "text-indigo-400") {
+      clearTimeout(toastTimeout);
+      toastMessage.textContent = msg;
+      toastIcon.className = `fa-solid ${iconClass} ${iconColor}`;
+      toast.classList.remove('opacity-0', 'translate-y-20');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'translate-y-20');
+      }, 2500);
+    }
+
+    // 5개 종목 탭 렌더링
+    function renderTabs() {
+      sportTabsContainer.innerHTML = '';
+      sportsData.forEach((s) => {
+        const isActive = s.id === activeSportId;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap ${
+          isActive 
+            ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' 
+            : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+        }`;
+
+        let statusDot = s.winner 
+          ? '<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>' 
+          : (s.rounds && s.rounds.length > 0 ? '<span class="w-2 h-2 rounded-full bg-emerald-400"></span>' : '');
+
+        btn.innerHTML = `
+          <span>종목 ${s.id}: ${escapeHtml(s.name)}</span>
+          ${statusDot}
+        `;
+
+        btn.addEventListener('click', () => {
+          switchSport(s.id);
+        });
+
+        sportTabsContainer.appendChild(btn);
+      });
+
+      renderAllSportsSummary();
+    }
+
+    // 종목 전환
+    function switchSport(id) {
+      activeSportId = id;
+      loadSportToUI();
+      renderTabs();
+    }
+
+    // 종목 데이터를 UI 입력칸 및 대진표에 동기화
+    function loadSportToUI() {
+      const sport = getCurrentSport();
+      inputSportName.value = sport.name;
+      inputStudents.value = sport.rawNames || '';
+      currentSportBadge.textContent = `종목 ${sport.id}`;
+      currentSportDisplayTitle.textContent = sport.name;
+
+      updateCountBadge();
+      renderBracket();
+      renderPodium();
+      renderAllSportsSummary();
+    }
+
+    /**
+     * 표준 토너먼트 시드 분산 순서 생성 함수
+     */
+    function getStandardSeedOrder(size) {
+      let rounds = Math.log2(size) - 1;
+      let order = [1, 2];
+      for (let i = 0; i < rounds; i++) {
+        const nextOrder = [];
+        const sum = order.length * 2 + 1;
+        for (let j = 0; j < order.length; j++) {
+          nextOrder.push(order[j]);
+          nextOrder.push(sum - order[j]);
+        }
+        order = nextOrder;
+      }
+      return order;
+    }
+
+    /**
+     * 토너먼트 대진표 생성 알고리즘 (부전승 고른 분산)
+     */
+    function generateTournament() {
+      const sport = getCurrentSport();
+      let names = parseStudentNames(inputStudents.value);
+
+      if (names.length < 2) {
+        showToast("최소 2명 이상의 학생을 입력해주세요.", "fa-circle-exclamation", "text-rose-400");
+        return;
+      }
+
+      // 무작위 셔플
+      if (checkShuffle.checked) {
+        for (let i = names.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [names[i], names[j]] = [names[j], names[i]];
+        }
+      }
+
+      // 2의 거듭제곱 구하기 (Bracket Size)
+      let bracketSize = 1;
+      while (bracketSize < names.length) {
+        bracketSize *= 2;
+      }
+
+      // 표준 시드 분산 (부전승이 골고루 흩어지도록)
+      const seedOrder = getStandardSeedOrder(bracketSize);
+      const slots = new Array(bracketSize).fill(null);
+
+      for (let i = 0; i < bracketSize; i++) {
+        const seedIndex = seedOrder[i] - 1;
+        if (seedIndex < names.length) {
+          slots[i] = names[seedIndex];
+        } else {
+          slots[i] = null;
+        }
+      }
+
+      // 라운드 구성
+      const rounds = [];
+      let roundMatchCount = bracketSize / 2;
+      let roundIndex = 0;
+
+      // 1라운드 경기 생성
+      const firstRoundMatches = [];
+      for (let i = 0; i < roundMatchCount; i++) {
+        const player1 = slots[i * 2];
+        const player2 = slots[i * 2 + 1];
+
+        const match = {
+          id: `R0-M${i}`,
+          round: 0,
+          matchIndex: i,
+          p1: player1,
+          p2: player2,
+          winner: null
+        };
+
+        // 한쪽만 있는 경우 1R 자동 부전승 판정
+        if (player1 && !player2) {
+          match.winner = player1;
+        } else if (!player1 && player2) {
+          match.winner = player2;
+        }
+
+        firstRoundMatches.push(match);
+      }
+      rounds.push(firstRoundMatches);
+
+      // 2라운드부터 결승까지 슬롯 생성
+      while (roundMatchCount > 1) {
+        roundIndex++;
+        roundMatchCount /= 2;
+        const currentRoundMatches = [];
+        for (let i = 0; i < roundMatchCount; i++) {
+          currentRoundMatches.push({
+            id: `R${roundIndex}-M${i}`,
+            round: roundIndex,
+            matchIndex: i,
+            p1: null,
+            p2: null,
+            winner: null
+          });
+        }
+        rounds.push(currentRoundMatches);
+      }
+
+      sport.rounds = rounds;
+      sport.winner = null;
+      sport.runnerUp = null;
+
+      // 부전승 진출자 다음 라운드로 전파
+      propagateAllWinners(sport);
+
+      saveData();
+      renderBracket();
+      renderPodium();
+      renderTabs();
+      showToast(`${names.length}명 대진표가 완성되었습니다!`, "fa-diagram-project");
+    }
+
+    /**
+     * 라운드 간 승자 전파 로직
+     */
+    function propagateAllWinners(sport) {
+      if (!sport.rounds || sport.rounds.length === 0) return;
+
+      for (let r = 0; r < sport.rounds.length - 1; r++) {
+        const currMatches = sport.rounds[r];
+        const nextMatches = sport.rounds[r + 1];
+
+        for (let m = 0; m < currMatches.length; m++) {
+          const match = currMatches[m];
+          const nextMatchIndex = Math.floor(m / 2);
+          const isFirstSlot = (m % 2 === 0);
+
+          if (nextMatches[nextMatchIndex]) {
+            if (isFirstSlot) {
+              nextMatches[nextMatchIndex].p1 = match.winner || null;
+            } else {
+              nextMatches[nextMatchIndex].p2 = match.winner || null;
+            }
+
+            // 상위 경기 진출자가 바뀌어 기존 선택 승자와 다르면 리셋
+            const nm = nextMatches[nextMatchIndex];
+            if (nm.winner && nm.winner !== nm.p1 && nm.winner !== nm.p2) {
+              nm.winner = null;
+            }
+          }
+        }
+      }
+
+      // 최종 결승전 우승/준우승 반영
+      const finalRound = sport.rounds[sport.rounds.length - 1];
+      if (finalRound && finalRound.length === 1) {
+        const finalMatch = finalRound[0];
+        if (finalMatch.winner) {
+          sport.winner = finalMatch.winner;
+          sport.runnerUp = (finalMatch.winner === finalMatch.p1) ? finalMatch.p2 : finalMatch.p1;
+        } else {
+          sport.winner = null;
+          sport.runnerUp = null;
+        }
+      }
+    }
+
+    /**
+     * 승자 선택 클릭 처리 핸들러
+     */
+    function onSelectWinner(roundIndex, matchIndex, selectedPlayer) {
+      const sport = getCurrentSport();
+      if (!sport || !sport.rounds) return;
+
+      const match = sport.rounds[roundIndex][matchIndex];
+      if (!match || !selectedPlayer) return;
+
+      // 다시 누르면 취소 토글
+      if (match.winner === selectedPlayer) {
+        match.winner = null;
+      } else {
+        match.winner = selectedPlayer;
+      }
+
+      propagateAllWinners(sport);
+      saveData();
+      renderBracket();
+      renderPodium();
+      renderTabs();
+
+      if (sport.winner) {
+        triggerConfetti();
+        showToast(`🎉 ${sport.winner} 학생이 우승했습니다!`, "fa-trophy", "text-amber-400");
+      }
+    }
+
+    // 축하 폭죽 효과
+    function triggerConfetti() {
+      if (typeof confetti === 'function') {
+        confetti({
+          particleCount: 90,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      }
+    }
+
+    // 라운드 레이블 명칭
+    function getRoundLabel(roundIndex, totalRounds) {
+      const diff = totalRounds - 1 - roundIndex;
+      if (diff === 0) return "🏆 결승전";
+      if (diff === 1) return "준결승전 (4강)";
+      if (diff === 2) return "8강전";
+      if (diff === 3) return "16강전";
+      return `${Math.pow(2, diff + 1)}강전`;
+    }
+
+    /**
+     * 대진표 화면 렌더링
+     */
+    function renderBracket() {
+      const sport = getCurrentSport();
+
+      if (!sport.rounds || sport.rounds.length === 0) {
+        emptyBracketState.classList.remove('hidden');
+        tournamentTree.classList.add('hidden');
+        tournamentTree.innerHTML = '';
+        matchProgressText.textContent = "명단 작성 필요";
+        return;
+      }
+
+      emptyBracketState.classList.add('hidden');
+      tournamentTree.classList.remove('hidden');
+      tournamentTree.innerHTML = '';
+
+      let totalMatches = 0;
+      let completedMatches = 0;
+      const totalRounds = sport.rounds.length;
+
+      sport.rounds.forEach((roundMatches, rIdx) => {
+        const roundCol = document.createElement('div');
+        roundCol.className = 'flex flex-col justify-around items-center h-full gap-6 min-w-[210px] relative';
+
+        const roundTitle = document.createElement('div');
+        roundTitle.className = 'w-full text-center py-1.5 px-3 mb-2 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 shadow-xs flex items-center justify-center gap-1.5 sticky top-0 z-10';
+        roundTitle.innerHTML = `<span class="text-indigo-600 font-extrabold">${rIdx + 1}R</span> ${getRoundLabel(rIdx, totalRounds)}`;
+        roundCol.appendChild(roundTitle);
+
+        const matchesContainer = document.createElement('div');
+        matchesContainer.className = 'flex flex-col justify-around w-full flex-1 gap-6';
+
+        roundMatches.forEach((m, mIdx) => {
+          totalMatches++;
+          if (m.winner) completedMatches++;
+
+          const matchCard = document.createElement('div');
+          matchCard.className = 'bg-white rounded-xl border border-slate-200 shadow-sm p-2.5 flex flex-col gap-1.5 transition duration-150 hover:shadow-md hover:border-slate-300';
+
+          const isR1SingleByeP1 = (rIdx === 0 && m.p1 && !m.p2);
+          const isR1SingleByeP2 = (rIdx === 0 && !m.p1 && m.p2);
+          const canPlay = Boolean(m.p1 && m.p2);
+
+          const p1Btn = createPlayerButton(
+            m.p1, 
+            m.winner === m.p1, 
+            () => { if (canPlay) onSelectWinner(rIdx, mIdx, m.p1); }, 
+            isR1SingleByeP1,
+            canPlay
+          );
+
+          const p2Btn = createPlayerButton(
+            m.p2, 
+            m.winner === m.p2, 
+            () => { if (canPlay) onSelectWinner(rIdx, mIdx, m.p2); }, 
+            isR1SingleByeP2,
+            canPlay
+          );
+
+          const matchMeta = document.createElement('div');
+          matchMeta.className = 'flex justify-between items-center px-1 text-[10px] text-slate-400 font-medium';
+          
+          let statusText = '<span class="text-slate-400">대기</span>';
+          if (isR1SingleByeP1 || isR1SingleByeP2) {
+            statusText = '<span class="text-indigo-500 font-semibold">1R 부전승</span>';
+          } else if (m.winner) {
+            statusText = '<span class="text-emerald-600 font-bold flex items-center gap-0.5"><i class="fa-solid fa-check"></i> 완료</span>';
+          } else if (canPlay) {
+            statusText = '<span class="text-amber-500 font-bold animate-pulse">선택 가능</span>';
+          }
+
+          matchMeta.innerHTML = `
+            <span>매치 #${mIdx + 1}</span>
+            ${statusText}
+          `;
+
+          matchCard.appendChild(matchMeta);
+          matchCard.appendChild(p1Btn);
+          matchCard.appendChild(p2Btn);
+          matchesContainer.appendChild(matchCard);
+        });
+
+        roundCol.appendChild(matchesContainer);
+        tournamentTree.appendChild(roundCol);
+      });
+
+      matchProgressText.textContent = `진행: ${completedMatches} / ${totalMatches} 경기`;
+    }
+
+    /**
+     * 선수 카드 버튼 생성
+     */
+    function createPlayerButton(name, isWinner, onClick, isByeSlot, isClickable) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+
+      if (!name) {
+        btn.className = "w-full text-left px-2.5 py-2 rounded-lg text-xs font-medium border border-dashed border-slate-200 text-slate-300 flex items-center justify-between cursor-not-allowed bg-slate-50/50";
+        btn.innerHTML = `<span class="truncate">미정</span>`;
+        return btn;
+      }
+
+      let bgClass = "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200";
+      let icon = '<i class="fa-regular fa-circle text-slate-300 text-xs"></i>';
+
+      if (isWinner) {
+        bgClass = "bg-emerald-500 text-white font-bold border-emerald-600 shadow-xs";
+        icon = '<i class="fa-solid fa-circle-check text-white text-xs"></i>';
+      } else if (isByeSlot) {
+        bgClass = "bg-slate-100 text-slate-500 border-slate-200 cursor-default";
+        icon = '<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold">1R 부전승</span>';
+      } else if (!isClickable) {
+        bgClass = "bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed";
+        icon = '<span class="text-[10px] text-slate-400">대기 중</span>';
+      }
+
+      btn.className = `w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold border flex items-center justify-between transition ${bgClass}`;
+      btn.innerHTML = `
+        <span class="truncate pr-1">${escapeHtml(name)}</span>
+        <span class="shrink-0">${icon}</span>
+      `;
+
+      if (isClickable && !isByeSlot) {
+        btn.addEventListener('click', onClick);
+        btn.title = "클릭하여 승자로 지정";
+        btn.classList.add('cursor-pointer', 'active:scale-95');
+      }
+
+      return btn;
+    }
+
+    /**
+     * 우측 우승 / 준우승자 보드 렌더링
+     */
+    function renderPodium() {
+      const sport = getCurrentSport();
+
+      if (sport && sport.winner) {
+        winnerNameElem.textContent = sport.winner;
+        winnerSubElem.textContent = "🏆 대회 우승을 축하합니다!";
+        winnerNameElem.classList.add('text-amber-600');
+        winnerBox.classList.add('ring-2', 'ring-amber-400', 'bg-amber-50');
+      } else {
+        winnerNameElem.textContent = "-";
+        winnerSubElem.textContent = "결승전 승리 대기 중";
+        winnerNameElem.classList.remove('text-amber-600');
+        winnerBox.classList.remove('ring-2', 'ring-amber-400', 'bg-amber-50');
+      }
+
+      if (sport && sport.runnerUp) {
+        runnerupNameElem.textContent = sport.runnerUp;
+        runnerupSubElem.textContent = "🥈 값진 준우승을 달성했습니다!";
+        runnerupNameElem.classList.add('text-slate-800');
+        runnerupBox.classList.add('bg-slate-50');
+      } else {
+        runnerupNameElem.textContent = "-";
+        runnerupSubElem.textContent = "결승전 패자 대기 중";
+        runnerupNameElem.classList.remove('text-slate-800');
+        runnerupBox.classList.remove('bg-slate-50');
+      }
+    }
+
+    /**
+     * 5개 종목 전체 현황 요약 리스트
+     */
+    function renderAllSportsSummary() {
+      allSportsSummary.innerHTML = '';
+      sportsData.forEach((s) => {
+        const item = document.createElement('div');
+        const isCurrent = s.id === activeSportId;
+        item.className = `p-2.5 rounded-xl border text-xs transition flex items-center justify-between cursor-pointer ${
+          isCurrent ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50 border-slate-100 hover:bg-slate-100'
+        }`;
+
+        item.addEventListener('click', () => {
+          switchSport(s.id);
+        });
+
+        const winnerBadge = s.winner 
+          ? `<span class="font-bold text-amber-700 flex items-center gap-1"><i class="fa-solid fa-crown text-amber-500 text-[10px]"></i> ${escapeHtml(s.winner)}</span>` 
+          : `<span class="text-slate-400 font-normal">진행 중</span>`;
+
+        const runnerBadge = s.runnerUp 
+          ? `<span class="text-slate-500">2위: ${escapeHtml(s.runnerUp)}</span>` 
+          : '';
+
+        item.innerHTML = `
+          <div class="flex items-center gap-2 overflow-hidden mr-2">
+            <span class="w-5 h-5 rounded-md bg-white border border-slate-200 text-slate-700 flex items-center justify-center font-bold text-[10px] shrink-0">
+              ${s.id}
+            </span>
+            <span class="font-bold text-slate-800 truncate">${escapeHtml(s.name)}</span>
+          </div>
+          <div class="text-right shrink-0">
+            <div>${winnerBadge}</div>
+            ${runnerBadge ? `<div class="text-[10px] text-slate-400 mt-0.5">${runnerBadge}</div>` : ''}
+          </div>
+        `;
+
+        allSportsSummary.appendChild(item);
+      });
+    }
+
+    // 이벤트 리스너 바인딩
+    function setupEventListeners() {
+      inputSportName.addEventListener('input', (e) => {
+        const sport = getCurrentSport();
+        sport.name = e.target.value.trim() || `종목 ${sport.id}`;
+        currentSportDisplayTitle.textContent = sport.name;
+        renderTabs();
+        saveData();
+      });
+
+      inputStudents.addEventListener('input', (e) => {
+        const sport = getCurrentSport();
+        sport.rawNames = e.target.value;
+        updateCountBadge();
+        saveData();
+      });
+
+      btnGenerate.addEventListener('click', () => {
+        generateTournament();
+      });
+
+      btnResetCurrent.addEventListener('click', () => {
+        const sport = getCurrentSport();
+        sport.rounds = [];
+        sport.winner = null;
+        sport.runnerUp = null;
+        saveData();
+        renderBracket();
+        renderPodium();
+        renderTabs();
+        showToast("현재 종목 대진이 초기화되었습니다.", "fa-arrow-rotate-left", "text-slate-400");
+      });
+
+      btnShuffleSample.addEventListener('click', () => {
+        const samplePool = [
+          "김도윤", "이지민", "박서준", "정유나", "최현우", "강예린", "조성민", "윤아린"
+        ];
+        // 5명 샘플 채우기 (홀수 테스트에 최적화)
+        const shuffled = [...samplePool].sort(() => 0.5 - Math.random()).slice(0, 5);
+        inputStudents.value = shuffled.join("\n");
+        const sport = getCurrentSport();
+        sport.rawNames = inputStudents.value;
+        updateCountBadge();
+        saveData();
+        showToast("5명 샘플 명단이 입력되었습니다. 대진표 생성을 눌러보세요!");
+      });
+    }
+
+    // 페이지 진입 초기화
+    window.onload = function() {
+      loadInitialData();
+      renderTabs();
+      loadSportToUI();
+      setupEventListeners();
+    };
+  </script>
+</body>
+</html>
